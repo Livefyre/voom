@@ -1,27 +1,30 @@
-from logging import getLogger
 import imp
 import importlib
+from logging import getLogger
+import threading
+
 
 LOG = getLogger(__name__)
 
-_RACE_PROTECTION = False  # protect against shenanigans.
+_HANDLERS_LOADED = False # protect against shenanigans.
 
 
 def autodiscover_bus_handlers():
     """Include handlers for all applications in ``INSTALLED_APPS``."""
     from django.conf import settings
-    #from django.conf import settings
-    global _RACE_PROTECTION
+    # from django.conf import settings
+    global _HANDLERS_LOADED
 
-    if _RACE_PROTECTION:
-        return
-    _RACE_PROTECTION = True
-    try:
-        LOG.info("Discovering bus handlers...")
-        return filter(None, [find_related_module(app, "handlers")
-                             for app in settings.INSTALLED_APPS])
-    finally:
-        _RACE_PROTECTION = False
+    with threading.RLock():
+        if _HANDLERS_LOADED:
+            return
+        _HANDLERS_LOADED = True
+        try:
+            LOG.info("Discovering bus handlers...")
+            return filter(None, [find_related_module(app, "handlers")
+                                 for app in settings.INSTALLED_APPS])
+        finally:
+            _HANDLERS_LOADED = False
 
 
 def find_related_module(app, related_name):
